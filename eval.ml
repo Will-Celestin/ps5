@@ -71,7 +71,7 @@ let string_of_value = Printer.make_string_of format_value
 
 let rec eval env e =
    match e with 
-      |Unit -> Vunit 
+      |Unit -> VUnit 
       |Int i -> VInt i
       |Boolean b -> VBool b
       |String s -> VString s
