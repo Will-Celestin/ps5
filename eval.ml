@@ -70,4 +70,12 @@ let string_of_value = Printer.make_string_of format_value
 (******************************************************************************)
 
 let rec eval env e =
-  failwith "I am I, and I wish I weren't."
+   match e with 
+      |Unit -> Vunit 
+      |Int i -> VInt i
+      |Boolean b -> VBool b
+      |String s -> VString s
+      |Pair (p1, p2) ->  
+      let p11 = eval env p1 in 
+      let p22 = eval env p2 in VPair (p11, p22)  
+      |
