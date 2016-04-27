@@ -160,7 +160,7 @@ let rec eval env e =
                           |false -> false
                         in
                         match li with
-                       | []   -> VError "Match not exhaustive"
+                       | []   -> VError "Match not found"
                        | h::d -> let (p,e) = h in
                                   if ((m p e0) = true) then eval env e
                                   else eval env (Match (e0,d))
