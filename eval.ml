@@ -125,10 +125,13 @@ let rec eval env e =
                           else eval d e)
 
   | Let (v,e1,e2) -> let x = eval env e1 in
+                     let v = string_of_value x in
                      eval ((v,ref x)::env) e2
 
-  | LetRec (f,e1,e2) -> let x = eval env e1 in
-                        eval ((f,ref x)::env) e2
+  | LetRec (f,e1,e2) -> let g = VError "Not defined" in
+                        let env1 = (f,ref g)::env in
+                        let x = eval env e1 in
+                        eval ((f,ref x)::env1) e2
 
   | App (e1,e2) -> let v = eval env e2 in
                    eval ((string_of_value v,ref v)::env) e1
