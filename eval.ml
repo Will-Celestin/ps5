@@ -30,8 +30,36 @@ let rec find_match (p : pattern) (v : value) : environment option =
   failwith "Hot tunnels alternated with cool tunnels."
 
 (** apply the given operator to the given arguments *)
-let rec eval_operator (op : operator) (v1 : value) (v2 : value) : value =
-  failwith "that is the secret of happiness and virtue—liking what you've got to do."
+let rec eval_operator op v1 v2 =
+  match v1 with
+  | VUnit -> VUnit
+
+  | VInt i -> ( match v2 with
+                | VInt j -> if    (op=Plus) then VInt (i+j)
+                          else if (op=Minus) then VInt (i-j)
+                          else if (op=Times) then VInt (i*j)
+                          else if (op=Gt) then VBool (i>j)
+                          else if (op=Lt) then VBool (i<j)
+                          else if (op=GtEq) then VBool (i>=j)
+                          else if (op=LtEq) then VBool (i<=j)
+                          else if (op=NotEq) then VBool (i!=j)
+                          else VError "Invalid operator"
+                | _ -> VError "Value mismatch")
+
+
+  | VBool b -> (match v2 with
+                | VBool c -> if (op=Eq) then VBool (b=c)
+                             else if (op=NotEq) then VBool (b!=c)
+                             else VError "Invalid operator"
+                | _ -> VError "Value mismatch")
+
+
+  | VString s -> (match v2 with
+                  | VString t -> if (op=Concat) then VString (s^t)
+                                 else VError "Invalid operator"
+                  | _ -> VError "Value mismatch")
+
+  | _ -> VError "Invalid values"
 
 (** Format a value for printing. *)
 let rec format_value (f : Format.formatter) (v : value) : unit =
@@ -70,4 +98,69 @@ let string_of_value = Printer.make_string_of format_value
 (******************************************************************************)
 
 let rec eval env e =
-  failwith "I am I, and I wish I weren't."
+  match e with
+  | Unit     -> VUnit
+  | Int a    -> VInt a
+  | Bool a   -> VBool a
+  | String a -> VString a
+
+  | BinOp (o,e1,e2) -> eval_operator o (eval env e1) (eval env e2)
+
+  | If (e1,e2,e3) -> (match (eval env e1) with
+                      | VBool a -> if (a=true) then eval env e2
+                                   else if (a=false) then eval env e3
+                                   else VError "Invalid evaluation of bool"
+                      | _ -> VError "Invalid evaluation of bool")
+
+  | Var a ->  (match env with
+               | [] -> VError "Variable not found"
+               | h::d ->  let (j,k) = h in
+                          if (a=j) then (!k)
+                          else eval d e)
+
+  | Let (v,e1,e2) -> let x = eval env e1 in
+                     eval ((v,ref x)::env) e2
+
+  | LetRec (f,e1,e2) -> let x = eval env e1 in
+                        eval ((f,ref x)::env) e2
+
+  | App (e1,e2) -> let v = eval env e2 in
+                   eval ((string_of_value v,ref v)::env) e1
+
+  | Fun (v,e)       -> VClosure (v,e,env)
+
+  | Pair (e1,e2)    -> VPair (eval env e1, eval env e2)
+
+  | Variant (e1,e2) -> VVariant (e1, eval env e2)
+
+  | Match (e0,li)   ->  let m p e =
+                          let pm pat =
+                            match pat with
+                            | PUnit -> 0
+                            | PInt a -> 1
+                            | PBool a -> 2
+                            | PString a -> 3
+                            | PVar a -> 4
+                            | PVariant (a,b) -> 5
+                            | PPair (a,b) -> 6
+                          in
+                          let em exp =
+                            match exp with
+                            | Unit -> 0
+                            | Int a -> 1
+                            | Bool a -> 2
+                            | String a -> 3
+                            | Var a -> 4
+                            | Variant (a,b) -> 5
+                            | Pair (a,b) -> 6
+                            | _ -> -1
+                          in
+                          match ((pm p)=(em e)) with
+                          |true -> true
+                          |false -> false
+                        in
+                        match li with
+                       | []   -> VError "Match not exhaustive"
+                       | h::d -> let (p,e) = h in
+                                  if ((m p e0) = true) then eval env e
+                                  else eval env (Match (e0,d))
