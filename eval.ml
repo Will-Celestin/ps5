@@ -56,6 +56,8 @@ let rec eval_operator op v1 v2 =
 
   | VString s -> (match v2 with
                   | VString t -> if (op=Concat) then VString (s^t)
+                                 else if (op=Eq) then VBool (s=t)
+                                 else if (op=NotEq) then VBool (s!=t)
                                  else VError "Invalid operator"
                   | _ -> VError "Value mismatch")
 
