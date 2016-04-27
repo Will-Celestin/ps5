@@ -91,7 +91,15 @@ let rec format_value (f : Format.formatter) (v : value) : unit =
    * and see the printer.ml for some (complicated) examples. Printer, format_type is
    * a nice example.
    *)
-  failwith "The light was frozen, dead, a ghost."
+  match v with
+       | VUnit -> failwith "No such format"
+       | VInt a -> Format.fprintf f "%i" a
+       | VString a -> Format.fprintf f "%s" a
+       | VBool a -> Format.fprintf f "%b" a
+       | VClosure (a,b,c) -> failwith "No such format"
+       | VVariant (a,b) -> failwith "No such format"
+       | VPair (a,b) -> failwith "No such format"
+       | VError -> failwith "No such format"
 
 (** use format_value to print a value to the console *)
 let print_value = Printer.make_printer format_value
