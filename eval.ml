@@ -61,6 +61,10 @@ let rec eval_operator op v1 v2 =
                                  else VError "Invalid operator"
                   | _ -> VError "Value mismatch")
 
+  | VPair (x,y) -> (match v2 with
+                    | VPair (a,b) -> VPair (eval_operator op x a,eval_operator op y b)
+                    | _ -> VError "Value mismatch")
+
   | _ -> VError "Invalid values"
 
 (** Format a value for printing. *)
