@@ -132,7 +132,68 @@ VPair (VBool false,VBool true)
 TEST_UNIT = eval [] (BinOp (LtEq, Pair (Int 4,Int 2), Pair (Int 4,Int 4))) ===
 VPair (VBool true,VBool true)
 
+(*Vars*)
+TEST_UNIT = eval [( "one" , ref (VInt 1))] (Var "one") === VInt 1
+TEST_UNIT = eval [( "one" , ref (VBool true))] (Var "one") === VBool true
+TEST_UNIT = eval [( "one" , ref (VBool false))] (Var "one") === VBool false
+TEST_UNIT = eval [( "one" , ref (VUnit))] (Var "one") === VUnit
+TEST_UNIT = eval [( "one" , ref (VString "one"))] (Var "one") === VString "one"
+TEST_UNIT = eval [( "one" , ref (VPair (VString "A",VString "B")))] (Var "one") ===
+VPair (VString "A",VString "B")
 
+(*If*)
+TEST_UNIT = eval [] (Parse.parse_expr "if false then 4 + 2 else 4 * 2") === VInt 8
+TEST_UNIT = eval [] (Parse.parse_expr "if true then 4 + 2 else 4 * 2") === VInt 6
+
+(*Let*)
+TEST_UNIT = eval [] (Parse.parse_expr "let a = 4 + 2 in a * 2") === VInt 12
+TEST_UNIT = eval [] (Parse.parse_expr "let a = 4 * 2 in a + a") === VInt 16
+
+(*LetRec/App*)
+(*Map*)
+TEST_UNIT = eval [] (Parse.parse_expr "let rec map = fun f -> fun l -> match l with
+                                | Nil ()       -> Nil ()
+                                | Cons (hd,tl) -> Cons (f hd, map f tl)
+                                in map") === VClosure ("f",                                                                                       Fun ("l",
+    Match (Var "l",
+     [(PVariant ("Nil", PUnit), Variant ("Nil", Unit));
+      (PVariant ("Cons", PPair (PVar "hd", PVar "tl")),
+       Variant ("Cons", Pair (App (Var "f", Var "hd"), App (App (Var "map", Var "f"), Var "tl"))))])),
+   [])
+(*Fold*)
+TEST_UNIT = eval [] (Parse.parse_expr "let rec fold = fun f -> fun l -> fun a -> match l with
+                                 | Nil () -> a
+                                 | Cons (hd,tl) -> f hd (fold f tl a)
+                               in fold") === VClosure ("f",                                                                                       Fun ("l",
+  Fun ("a",
+   Match (Var "l",
+    [(PVariant ("Nil", PUnit), Var "a");
+     (PVariant ("Cons", PPair (PVar "hd", PVar "tl")),
+      App (App (Var "f", Var "hd"), App (App (App (Var "fold", Var "f"), Var "tl"), Var "a")))]))),
+ [])
+
+(*Fun*)
+TEST_UNIT = eval [] (Parse.parse_expr "fun x -> 3 + x") ===
+VClosure ("x", BinOp (Plus, Int 3, Var "x"), [])
+
+TEST_UNIT = eval [] (Fun ("x", BinOp(Plus, Int 3, Var "x"))) ===
+VClosure ("x", BinOp (Plus, Int 3, Var "x"), [])
+
+(*App*)
+TEST_UNIT = eval [] (App ((Parse.parse_expr "fun x -> 3 + x"),Int 3)) ===
+VInt 6
+
+TEST_UNIT = eval [] (App ((Parse.parse_expr "fun x -> 3 * x"),Int 3)) ===
+VInt 9
+
+(*Variant*)
+TEST_UNIT = eval [] (Variant ("name", Parse.parse_expr "if false then 4 + 2 else 4 * 2")) ===
+VVariant ("name", VInt 8)
+
+TEST_UNIT = eval [] (Variant ("name", BinOp(Minus, Int 3,Int 3 ))) ===
+VVariant ("name", VInt 0)
+
+(*Match*)
 
 
 let () = Pa_ounit_lib.Runtime.summarize()
