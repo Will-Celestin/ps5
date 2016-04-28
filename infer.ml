@@ -87,16 +87,21 @@ let string_of_eqns = Printer.make_string_of format_eqns
 
 
 (** generate an unused type variable *)
-let newvar () : typ =
-  failwith "I like being myself. Myself and nasty."
+let next_var  = ref 0
+let newvar () : typ =next_var := 1 + !next_var;
+                  TAlpha (Format.sprintf "a%02i" !next_var)
+  
 
 
 
 (* return the constraints for a binary operator *)
 let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
-  failwith "Most human beings have an almost infinite capacity for taking things for granted."
-
-(** return the constraints for an expr
+  match op with 
+    | Plus | Minus | Times | Gt | Lt | GtEq | LtEq -> [Eq (TInt, t); Eq (TInt, tl); Eq (TInt, tr)]
+    | Concat -> [Eq (TString, t); Eq (TString, tl); Eq (TString, tr)]
+    | Eq | NotEq ->  let n = newvar() in [Eq (n, t); Eq (n, tl); Eq (n, tr)]
+    
+    (** return the constraints for an expr
   * vars refers to a data structure that stores the types of each of the variables
   * that have been defined.
   * It is completely your decision what type of data structure you want to use for vars
