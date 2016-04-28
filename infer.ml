@@ -100,7 +100,7 @@ let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
     | Plus | Minus | Times -> [Eq (t,TInt); Eq (tl, TInt); Eq (tr, TInt)]
     | Gt | Lt | GtEq | LtEq -> [Eq (t,TBool); Eq (tl, TInt); Eq (tr, TInt)]
     | Concat -> [Eq (TString, t); Eq (TString, tl); Eq (TString, tr)]
-    | Eq | NotEq ->  [Eq (t, TBool); Eq (tr, tl)]; 
+    | Eq | NotEq ->  [Eq (t, TBool); Eq (tr, tl)] 
     
     (** return the constraints for an expr
   * vars refers to a data structure that stores the types of each of the variables
@@ -135,11 +135,40 @@ let rec collect_expr (specs:variant_spec list) vars (e : annotated_expr)
                           let Eq (t3,t4) = List.hd y in 
                           [Eq (TStar (t1,t3), t)] @ x @ y
                           
-      |ALet (t,(v,t1), a1,a2) -> let newvars = [(v,t)] @ vars in 
-                                 let x = collect_expr specs vars a1 in 
+      |ALet (t,(v,typ), a1,a2) -> let x = collect_expr specs vars a1 in
+                                 let newvars = [(v,typ)] @ vars in
                                  let y = collect_expr specs newvars a2 in
                                  let Eq (t1,t2) = List.hd x in
-                                 [Eq (t, t1)] @ x @ y
+                                 let Eq (t3,t4) = List.hd y in
+                                 [Eq (t, t3); Eq (t1, typ)] @ x @ y
+      
+      |ALetRec (t,(v,typ),a1,a2) -> let newvars = [(v,typ)] @ vars  in 
+                                   let x = collect_expr specs newvars a1 in
+                                   let y = collect_expr specs newvars a2 in
+                                   let Eq (t1,t2) = List.hd x in
+                                   let Eq (t3,t4) = List.hd y in
+                                   [Eq (t, t3); Eq (t1, typ)] @ x @ y
+                                   
+      |AFun (t,(v,typ),a) -> let newvars = [(v,typ)] @ vars in 
+                             let x = collect_expr specs newvars a in 
+                             let Eq (t1,t2) = List.hd x in
+                             let t3 = TArrow (typ, t1) in 
+                             [Eq (t3, t)] @ x
+                             
+      |AVar (t,v) ->  (match vars with 
+                      |[] -> failwith "No such variable"
+                      |h::tail -> let (var, typ) = h in 
+                      if var = v then [Eq (t,typ)]
+                      else (collect_expr specs tail e))
+      
+      |AApp (t,a1,a2) -> (let x = collect_expr specs vars a1 in 
+                         let y = collect_expr specs vars a2 in 
+                         let Eq (t1,t2) = List.hd x in
+                         let Eq (t3,t4) = List.hd y in
+                         match t1 with 
+                           |TArrow (t5,t6) -> 
+                             [Eq (t, t6); Eq (t5, t3)] @ x @ y
+                           | _ -> failwith "cannot apply")
 
 (** return the constraints for a match cases
   * tconst refers to the type of the parameters of the specific constructors
