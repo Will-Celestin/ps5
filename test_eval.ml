@@ -143,11 +143,11 @@ VPair (VString "A",VString "B")
 
 (*If*)
 TEST_UNIT = eval [] (Parse.parse_expr "if false then 4 + 2 else 4 * 2") === VInt 8
-TEST_UNIT = eval [] (Parse.parse_expr "if true then 4 + 2 else 4 * 2") === VInt 6
+TEST_UNIT = eval [] (If (Bool true, BinOp (Plus, Int 4, Int 2), BinOp (Times, Int 4, Int 2))) === VInt 6
 
 (*Let*)
 TEST_UNIT = eval [] (Parse.parse_expr "let a = 4 + 2 in a * 2") === VInt 12
-TEST_UNIT = eval [] (Parse.parse_expr "let a = 4 * 2 in a + a") === VInt 16
+TEST_UNIT = eval [] (Let ("a",BinOp (Times, Int 4, Int 2),BinOp (Plus, Var "a", Var "a"))) === VInt 16
 
 (*LetRec/App*)
 (*Map*)
@@ -183,7 +183,7 @@ VClosure ("x", BinOp (Plus, Int 3, Var "x"), [])
 TEST_UNIT = eval [] (App ((Parse.parse_expr "fun x -> 3 + x"),Int 3)) ===
 VInt 6
 
-TEST_UNIT = eval [] (App ((Parse.parse_expr "fun x -> 3 * x"),Int 3)) ===
+TEST_UNIT = eval [] (App (Fun ("x", BinOp(Times, Int 3, Var "x")),Int 3)) ===
 VInt 9
 
 (*Variant*)
@@ -194,6 +194,16 @@ TEST_UNIT = eval [] (Variant ("name", BinOp(Minus, Int 3,Int 3 ))) ===
 VVariant ("name", VInt 0)
 
 (*Match*)
+TEST_UNIT = eval [] (Match (String "abc",
+                    [(PString "cba", String "cba");(PInt 1,Int 1);(PString "abc", String "abc")])) ===
+                    VString "cba"
 
+TEST_UNIT = eval [] (Match (Bool true,
+                    [(PString "cba", String "cba");(PBool false, Int 1);(PBool true, Int 0)])) ===
+                    VInt 1
+
+TEST_UNIT = eval [] (Match (String "abc",
+                    [(PBool true, String "cba");(PInt 1,Int 1);(PUnit, String "abc")])) ===
+                    VError "Match not found"
 
 let () = Pa_ounit_lib.Runtime.summarize()
