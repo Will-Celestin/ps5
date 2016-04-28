@@ -97,9 +97,10 @@ let newvar () : typ =next_var := 1 + !next_var;
 (* return the constraints for a binary operator *)
 let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
   match op with 
-    | Plus | Minus | Times | Gt | Lt | GtEq | LtEq -> [Eq (TInt, t); Eq (TInt, tl); Eq (TInt, tr)]
+    | Plus | Minus | Times -> [Eq (t,TInt); Eq (tl, TInt); Eq (tr, TInt)]
+    | Gt | Lt | GtEq | LtEq -> [Eq (t,TBool); Eq (tl, TInt); Eq (tr, TInt)]
     | Concat -> [Eq (TString, t); Eq (TString, tl); Eq (TString, tr)]
-    | Eq | NotEq ->  let n = newvar() in [Eq (n, t); Eq (n, tl); Eq (n, tr)]
+    | Eq | NotEq ->  [Eq (t, TBool); Eq (tr, tl)]; 
     
     (** return the constraints for an expr
   * vars refers to a data structure that stores the types of each of the variables
@@ -108,7 +109,25 @@ let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
   *)
 let rec collect_expr (specs:variant_spec list) vars (e : annotated_expr)
                      : equation list =
-  failwith "Great is truth, but still greater, from a practical point of view, is silence about truth."
+  match e with 
+      |AUnit t -> [Eq (t, TUnit)] 
+      |ABool (t,a) -> [Eq (t, TBool)] 
+      |AString (t,a) -> [Eq (t, TString)] 
+      |AInt (t,a) -> [Eq (t, TInt)] 
+      
+      |ABinOp (t,o,a1,a2) -> let x = collect_expr specs vars a1 in 
+                             let y = collect_expr specs vars a2 in 
+                             let Eq (t1,t2) = List.hd x in 
+                             let Eq (t3,t4) = List.hd y in 
+                             collect_binop t o t1 t3 @ x @ y
+                                        
+      |AIf (t,a1,a2,a3) -> let x = collect_expr specs vars a1 in 
+                           let y = collect_expr specs vars a2 in
+                           let z = collect_expr specs vars a3 in 
+                           let Eq (t1,t2) = List.hd x in 
+                           let Eq (t3,t4) = List.hd y in 
+                           let Eq (t5,t6) = List.hd z in 
+                           [Eq (t,t3); Eq (t3,t5); Eq (t1, TBool)] @ x @ y @ z
 
 (** return the constraints for a match cases
   * tconst refers to the type of the parameters of the specific constructors
@@ -130,7 +149,6 @@ and collect_pat specs (p:annotated_pattern) =
  * be satisfied for e to typecheck.
  *)
 let collect specs e =
-  failwith "Never put off till tomorrow the fun you can have today."
 
 (******************************************************************************)
 (** constraint solver (unification)                                          **)
