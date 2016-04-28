@@ -128,6 +128,18 @@ let rec collect_expr (specs:variant_spec list) vars (e : annotated_expr)
                            let Eq (t3,t4) = List.hd y in 
                            let Eq (t5,t6) = List.hd z in 
                            [Eq (t,t3); Eq (t3,t5); Eq (t1, TBool)] @ x @ y @ z
+                           
+      |APair (t,a1,a2) -> let x = collect_expr specs vars a1 in 
+                          let y = collect_expr specs vars a2 in
+                          let Eq (t1,t2) = List.hd x in 
+                          let Eq (t3,t4) = List.hd y in 
+                          [Eq (TStar (t1,t3), t)] @ x @ y
+                          
+      |ALet (t,(v,t1), a1,a2) -> let newvars = [(v,t)] @ vars in 
+                                 let x = collect_expr specs vars a1 in 
+                                 let y = collect_expr specs newvars a2 in
+                                 let Eq (t1,t2) = List.hd x in
+                                 [Eq (t, t1)] @ x @ y
 
 (** return the constraints for a match cases
   * tconst refers to the type of the parameters of the specific constructors
