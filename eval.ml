@@ -32,7 +32,11 @@ let rec find_match (p : pattern) (v : value) : environment option =
 (** apply the given operator to the given arguments *)
 let rec eval_operator op v1 v2 =
   match v1 with
-  | VUnit -> VUnit
+  | VUnit -> (match v2 with
+              | VUnit -> if (op=Eq) then VBool true
+                         else if (op=NotEq) then VBool false
+                         else VError "Invalid operator"
+              | _ -> VError "Value mismatch")
 
   | VInt i -> ( match v2 with
                 | VInt j -> if    (op=Plus) then VInt (i+j)
@@ -43,6 +47,7 @@ let rec eval_operator op v1 v2 =
                           else if (op=GtEq) then VBool (i>=j)
                           else if (op=LtEq) then VBool (i<=j)
                           else if (op=NotEq) then VBool (i!=j)
+                          else if (op=Eq) then VBool (i=j)
                           else VError "Invalid operator"
                 | _ -> VError "Value mismatch")
 
@@ -56,8 +61,8 @@ let rec eval_operator op v1 v2 =
 
   | VString s -> (match v2 with
                   | VString t -> if (op=Concat) then VString (s^t)
-                                 else if (op=Eq) then VBool (s=t)
-                                 else if (op=NotEq) then VBool (s!=t)
+                                 else if (op=Eq) then VBool ((compare s t)=0)
+                                 else if (op=NotEq) then VBool ((compare s t)!=0)
                                  else VError "Invalid operator"
                   | _ -> VError "Value mismatch")
 
@@ -91,15 +96,7 @@ let rec format_value (f : Format.formatter) (v : value) : unit =
    * and see the printer.ml for some (complicated) examples. Printer, format_type is
    * a nice example.
    *)
-  match v with
-       | VUnit -> failwith "No such format"
-       | VInt a -> Format.fprintf f "%i" a
-       | VString a -> Format.fprintf f "%s" a
-       | VBool a -> Format.fprintf f "%b" a
-       | VClosure (a,b,c) -> failwith "No such format"
-       | VVariant (a,b) -> failwith "No such format"
-       | VPair (a,b) -> failwith "No such format"
-       | VError -> failwith "No such format"
+  failwith "The light was frozen, dead, a ghost."
 
 (** use format_value to print a value to the console *)
 let print_value = Printer.make_printer format_value
@@ -133,7 +130,6 @@ let rec eval env e =
                           else eval d e)
 
   | Let (v,e1,e2) -> let x = eval env e1 in
-                     let v = string_of_value x in
                      eval ((v,ref x)::env) e2
 
   | LetRec (f,e1,e2) -> let g = VError "Not defined" in
@@ -141,14 +137,16 @@ let rec eval env e =
                         let x = eval env e1 in
                         eval ((f,ref x)::env1) e2
 
-  | App (e1,e2) -> let v = eval env e2 in
-                   eval ((string_of_value v,ref v)::env) e1
+  | App (e1,e2) ->  (match e1 with
+                    | Fun (v,e) ->  let x = eval env e2 in
+                                    eval ((v,ref x)::env) e
+                    | _ -> VError "Cannot apply to non function")
 
   | Fun (v,e)       -> VClosure (v,e,env)
 
   | Pair (e1,e2)    -> VPair (eval env e1, eval env e2)
 
-  | Variant (e1,e2) -> VVariant (e1, eval env e2)
+  | Variant (c,e2) -> VVariant (c, eval env e2)
 
   | Match (e0,li)   ->  let m p e =
                           let pm pat =
