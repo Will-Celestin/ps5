@@ -87,34 +87,164 @@ let string_of_eqns = Printer.make_string_of format_eqns
 
 
 (** generate an unused type variable *)
-let newvar () : typ =
-  failwith "I like being myself. Myself and nasty."
+let next_var  = ref 0
+let newvar () : typ =next_var := 1 + !next_var;
+                  TAlpha (Format.sprintf "a%02i" !next_var)
+  
 
 
 
 (* return the constraints for a binary operator *)
 let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
-  failwith "Most human beings have an almost infinite capacity for taking things for granted."
-
-(** return the constraints for an expr
+  match op with 
+    | Plus | Minus | Times -> [Eq (t,TInt); Eq (tl, TInt); Eq (tr, TInt)]
+    | Gt | Lt | GtEq | LtEq -> [Eq (t,TBool); Eq (tl, TInt); Eq (tr, TInt)]
+    | Concat -> [Eq (TString, t); Eq (TString, tl); Eq (TString, tr)]
+    | Eq | NotEq ->  [Eq (t, TBool); Eq (tr, tl)] 
+    
+    (** return the constraints for an expr
   * vars refers to a data structure that stores the types of each of the variables
   * that have been defined.
   * It is completely your decision what type of data structure you want to use for vars
   *)
 let rec collect_expr (specs:variant_spec list) vars (e : annotated_expr)
                      : equation list =
-  failwith "Great is truth, but still greater, from a practical point of view, is silence about truth."
+  match e with 
+      |AUnit t -> [Eq (t, TUnit)] 
+      |ABool (t,a) -> [Eq (t, TBool)] 
+      |AString (t,a) -> [Eq (t, TString)] 
+      |AInt (t,a) -> [Eq (t, TInt)] 
+      
+      |ABinOp (t,o,a1,a2) -> let x = collect_expr specs vars a1 in 
+                             let y = collect_expr specs vars a2 in 
+                             let t1 = typeof a1 in 
+                             let t2 = typeof a2 in 
+                             collect_binop t o t1 t2 @ x @ y
+                                        
+      |AIf (t,a1,a2,a3) -> let x = collect_expr specs vars a1 in 
+                           let y = collect_expr specs vars a2 in
+                           let z = collect_expr specs vars a3 in 
+                           let t1 = typeof a1 in 
+                           let t2 = typeof a2 in 
+                           let t3 = typeof a3 in 
+                           [Eq (t,t2); Eq (t,t3); Eq (t1, TBool)] @ x @ y @ z
+                           
+      |APair (t,a1,a2) -> let x = collect_expr specs vars a1 in 
+                          let y = collect_expr specs vars a2 in
+                          let t1 = typeof a1 in 
+                          let t2 = typeof a2 in
+                          [Eq (TStar (t1,t2), t)] @ x @ y
+                          
+      |ALet (t,(v,typ), a1,a2) -> let x = collect_expr specs vars a1 in
+                                 let newvars = [(v,typ)] @ vars in
+                                 let y = collect_expr specs newvars a2 in
+                                 let t1 = typeof a1 in 
+                                 let t2 = typeof a2 in
+                                 [Eq (t, t2); Eq (t1, typ)] @ x @ y
+      
+      |ALetRec (t,(v,typ),a1,a2) -> let newvars = [(v,typ)] @ vars  in 
+                                   let x = collect_expr specs newvars a1 in
+                                   let y = collect_expr specs newvars a2 in
+                                   let t1 = typeof a1 in 
+                                   let t2 = typeof a2 in
+                                   [Eq (t, t2); Eq (t1, typ)] @ x @ y
+                                   
+      |AFun (t,(v,typ),a) -> let newvars = [(v,typ)] @ vars in 
+                             let x = collect_expr specs newvars a in 
+                             let t1 = typeof a in
+                             let t2 = TArrow (typ, t1) in 
+                             [Eq (t2, t)] @ x
+                             
+      |AVar (t,v) ->  (match vars with 
+                      |[] -> failwith "No such variable"
+                      |h::tail -> let (var, typ) = h in 
+                      if var = v then [Eq (t,typ)]
+                      else (collect_expr specs tail e))
+      
+      |AApp (t,a1,a2) -> (let x = collect_expr specs vars a1 in 
+                         let y = collect_expr specs vars a2 in 
+                         let t1 = typeof a1 in 
+                         let t2 = typeof a2 in
+                         match t1 with 
+                           |TArrow (t3,t4) -> 
+                             [Eq (t, t4); Eq (t2, t3)] @ x @ y
+                           | _ -> failwith "cannot apply")
+                           
+      |AMatch (t,a,li) -> (let x = collect_expr specs vars a in 
+                          let t1 = typeof a in
+                          match li with 
+                            |[] -> []
+                            |h::tail -> let (p,e) = h in 
+                            let pats = collect_expr specs vars e in 
+                            let t2 = typeof e in 
+                            let pat = collect_pat specs vars p in 
+                            let t3 = typeof_pat p in 
+                            [Eq (t,t2); Eq (t1,t3)] @ x @ pat @ pats @ (collect_expr specs vars (AMatch (t,a,tail))))
+                            
+       |AVariant (t,c,a) -> let x = collect_expr specs vars a in 
+                            let t1 = typeof a in
+                            match specs with
+                              |[] -> failwith "unknown variant"
+                              |h::tail -> let cons = h.constructors in 
+                                  let rec check_cons con =
+                                  match con with
+                                    |[] -> collect_expr tail vars e 
+                                    |y::z -> let (constr, typ) = y in 
+                                    if constr = c then
+                                    (let var = h.vars in 
+                                    let rec alpha_to_v lis newlist= 
+                                      match lis with
+                                        |[] -> newlist
+                                        |hed::tel -> let talph = TAlpha hed in 
+                                        alpha_to_v tel (newlist @ [talph]) in
+                                    [Eq (t, TVariant((alpha_to_v var []), h.name)); Eq (t1,typ)] @ x)
+                                    else check_cons z in 
+                                  check_cons cons
+                            
 
 (** return the constraints for a match cases
   * tconst refers to the type of the parameters of the specific constructors
   * tvariant refers to the type of the variant as a whole
   *)
 and collect_case specs vs tconst tvariant ((p:annotated_pattern),(e:annotated_expr)) =
-  failwith "A love of nature keeps no factories busy."
+    failwith "unused content"
 
 (** return the constraints and variables for a pattern *)
-and collect_pat specs (p:annotated_pattern) =
-  failwith "Isn't there something in living dangerously?"
+and collect_pat specs vs (p:annotated_pattern) =
+  match p with
+      | APUnit t->  [Eq (t, TUnit)] 
+      | APInt (t,a) -> [Eq (t, TInt)] 
+      | APBool (t,a) -> [Eq (t, TBool)] 
+      | APString (t,a) -> [Eq (t, TString)] 
+      | APVar (t,v) -> (match vs with 
+                      |[] -> failwith "No such variable"
+                      |h::tail -> let (var, typ) = h in 
+                      if var = v then [Eq (t,typ)]
+                      else (collect_pat specs tail p))
+      | APVariant (t,c,a) -> (let x = collect_pat specs vs a in 
+                            let t1 = typeof_pat a in
+                            match specs with
+                              |[] -> failwith "unknown variant"
+                              |h::tail -> let cons = h.constructors in 
+                                  let rec check_cons con =
+                                  match con with
+                                    |[] -> collect_pat tail vs p 
+                                    |y::z -> let (constr, typ) = y in 
+                                    if constr = c then
+                                    (let var = h.vars in 
+                                    let rec alpha_to_v lis newlist= 
+                                      match lis with
+                                        |[] -> newlist
+                                        |hed::tel -> let talph = TAlpha hed in 
+                                        alpha_to_v tel (newlist @ [talph]) in
+                                    [Eq (t, TVariant((alpha_to_v var []), h.name)); Eq (t1,typ)] @ x)
+                                    else check_cons z in 
+                                  check_cons cons)
+      | APPair (t,a1,a2) -> let x = collect_pat specs vs a1 in 
+                          let y = collect_pat specs vs a2 in
+                          let t1 = typeof_pat a1 in
+                          let t2 = typeof_pat a2 in 
+                          [Eq (TStar (t1,t2), t)] @ x @ y
 
 (******************************************************************************)
 (** constraint generation                                                    **)
@@ -124,8 +254,7 @@ and collect_pat specs (p:annotated_pattern) =
  * collect traverses an expression e and returns a list of equations that must
  * be satisfied for e to typecheck.
  *)
-let collect specs e =
-  failwith "Never put off till tomorrow the fun you can have today."
+let collect specs e = collect_expr specs [] e
 
 (******************************************************************************)
 (** constraint solver (unification)                                          **)
